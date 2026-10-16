@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estrella de neutrones</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+
+    <!-- THREE.JS r128 + Postprocesado + GPGPU -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/misc/GPUComputationRenderer.js"></script>
+</head>
+
+<body>
+    <div id="app-wrapper">
+        <!-- Escena WebGL Principal -->
+        <canvas id="neutron-canvas" class="webgl"></canvas>
+
+        <!-- Barra Superior Mínima -->
+        <header class="top-bar ui-element">
+            <div class="brand-block">
+                <span class="status-dot"></span>
+                <span class="sim-title">PSR B0531+21</span>
+                <span class="sim-divider">/</span>
+                <span id="sim- subtitle-tag" class="sim-tag">VISUALIZACIÓN CINEMATOGRÁFICA</span>
+            </div>
+            <button id="btn-zen-mode" class="zen-btn" title="Ocultar / Mostrar interfaz (Tecla H)">
+                <i class="fa-regular fa-eye"></i> <span>Modo Contemplación (H)</span>
+            </button>
+        </header>
+
+        <!-- Panel Derecho Compacto: Parámetros Físicos -->
+        <aside id="inspector-panel" class="inspector-panel collapsed ui-element">
+            <div class="inspector-header">
+                <span>PARÁMETROS ASTROFÍSICOS</span>
+                <button id="btn-collapse-inspector" class="icon-toggle" title="Minimizar panel">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+            </div>
+
+            <div class="inspector-body">
+                <!-- Selector de Vista: Exterior vs Corte Interno -->
+                <div class="view-mode-switch">
+                    <button type="button" class="mode-tab active" data-view="exterior">
+                        <i class="fa-solid fa-globe"></i> Vista Exterior
+                    </button>
+                    <button type="button" class="mode-tab" data-view="cutaway">
+                        <i class="fa-solid fa-circle-half-stroke"></i> Corte Interno
+                    </button>
+                </div>
+
+                <!-- Leyenda compacta que aparece SOLO cuando el Corte Interno está activo -->
+                <div id="cutaway-guide" class="cutaway-guide" hidden>
+                    <div class="layer-row">
+                        <span class="layer-dot dot-crust"></span>
+                        <div><strong>Corteza Externa (0.92–1.0 R):</strong> Red cristalina de <sup>56</sup>Fe</div>
+                    </div>
+                    <div class="layer-row">
+                        <span class="layer-dot dot-pasta"></span>
+                        <div><strong>Corteza Interna (0.80–0.92 R):</strong> Pasta nuclear (10<sup>14</sup> g/cm³)</div>
+                    </div>
+                    <div class="layer-row">
+                        <span class="layer-dot dot-superfluid"></span>
+                        <div><strong>Núcleo Externo (0.35–0.80 R):</strong> Neutrones superfluidos</div>
+                    </div>
+                    <div class="layer-row">
+                        <span class="layer-dot dot-quark"></span>
+                        <div><strong>Núcleo Interno (0–0.35 R):</strong> Composición incierta; quarks hipotéticos</div>
+                    </div>
+                </div>
+
+                <!-- Regímenes de Púlsar -->
+                <div class="section-label">Régimen de Objeto</div>
+                <div class="preset-pills">
+                    <button type="button" class="preset-pill active" data-preset="crab">Púlsar Cangrejo</button>
+                    <button type="button" class="preset-pill" data-preset="magnetar">Magnetar</button>
+                    <button type="button" class="preset-pill" data-preset="millisecond">716 Hz</button>
+                </div>
+
+                <div class="section-label">Observación y calidad</div>
+                <div class="slider-block">
+                    <div class="slider-head"><span>Temperatura adoptada</span><strong id="lbl-temperature">1.50
+                            MK</strong></div><input type="range" id="ctrl-temperature" min="0.3" max="4" step="0.05"
+                        value="1.5">
+                </div>
+                <div class="slider-block"><label for="ctrl-environment">Intensidad del entorno</label><input
+                        type="range" id="ctrl-environment" min="0" max="2.5" step="0.05" value="1"></div>
+                <div class="slider-block"><label for="ctrl-space">Fondo galáctico lejano</label><input type="range"
+                        id="ctrl-space" min="0" max="2" step="0.05" value="0.55"></div>
+                <label class="quality-label" for="ctrl-quality">Calidad <select id="ctrl-quality">
+                        <option value="auto">Adaptada al dispositivo</option>
+                        <option value="low">Ligera</option>
+                        <option value="high">Alta</option>
+                    </select></label>
+                <label class="check-item"><input type="checkbox" id="chk-field"><span>Mostrar líneas de campo
+                        (guía)</span></label>
+                <label class="check-item"><input type="checkbox" id="chk-beams"><span>Haces del púlsar
+                        (guía)</span></label>
+                <p class="model-note">Radio adoptado: 12 km. Colores y entorno ilustrativos; nebulosa y haces sin escala
+                    común con la superficie. El corte es esquemático, no una solución TOV.</p>
+                <!-- Controles Deslizantes con Notación Limpia -->
+                <div class="slider-block">
+                    <div class="slider-head">
+                        <span>Frecuencia de rotación (ν)</span>
+                        <strong id="lbl-spin">30 Hz</strong>
+                    </div>
+                    <input type="range" id="ctrl-spin" min="1" max="716" step="1" value="30">
+                </div>
+
+                <div class="slider-block">
+                    <div class="slider-head">
+                        <span>Compacidad (R<sub>s</sub> / R)</span>
+                        <strong id="lbl-compact">0.35</strong>
+                    </div>
+                    <input type="range" id="ctrl-compact" min="0.15" max="0.48" step="0.01" value="0.35">
+                </div>
+
+                <div class="slider-block">
+                    <div class="slider-head">
+                        <span>Oblicuidad magnética (α)</span>
+                        <strong id="lbl-tilt">45°</strong>
+                    </div>
+                    <input type="range" id="ctrl-tilt" min="0" max="90" step="1" value="45">
+                </div>
+
+                <div class="slider-block">
+                    <div class="slider-head">
+                        <span>Campo magnético (log<sub>10</sub> B)</span>
+                        <strong id="lbl-bfield">10<sup>12.6</sup> G</strong>
+                    </div>
+                    <input type="range" id="ctrl-bfield" min="8.0" max="15.5" step="0.1" value="12.6">
+                </div>
+
+                <!-- Efectos Relativistas -->
+                <div class="checks-row">
+                    <label class="check-item">
+                        <input type="checkbox" id="chk-doppler" checked>
+                        <span>Boosting Doppler (δ⁴)</span>
+                    </label>
+                    <label class="check-item">
+                        <input type="checkbox" id="chk-lensing">
+                        <span>Distorsión óptica (artística)</span>
+                    </label>
+                </div>
+
+                <!-- Lecturas Físicas Calculadas -->
+                <div class="readouts-grid">
+                    <div class="readout-box">
+                        <span class="readout-label">Redshift Grav. (z<sub>g</sub>)</span>
+                        <strong id="out-zg">0.240</strong>
+                    </div>
+                    <div class="readout-box">
+                        <span class="readout-label">Superficie Visible</span>
+                        <strong id="out-surf">76.9%</strong>
+                    </div>
+                    <div class="readout-box">
+                        <span class="readout-label">Cilindro de Luz</span>
+                        <strong id="out-rlc">1,580 km</strong>
+                    </div>
+                    <div class="readout-box">
+                        <span class="readout-label">Vel. Ecuatorial (β<sub>eq</sub>)</span>
+                        <strong id="out-beta">0.008 c</strong>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <section class="cinema-copy ui-element">
+            <span class="eyebrow">OBSERVATORIO / 001</span>
+            <h1>El peso<br>del silencio.</h1>
+            <p>Una estrella de neutrones.<br>de los objetos mas bestiales del cosmos.</p>
+            <div class="scale-caption"><span>24 km</span> DIÁMETRO DEL MODELO</div>
+        </section>
+        <section class="cinema-controls ui-element" aria-label="Cámara y tiempo">
+            <div class="observation-tabs"><button data-observation="composite" class="active">Compuesta</button><button
+                    data-observation="thermal">Térmica</button><button data-observation="xray">Rayos X</button><button
+                    data-observation="field">Campo B</button></div>
+            <p id="observation-caption">Composición artística</p>
+            <p id="thermal-readouts" hidden></p>
+            <div class="size-row"><label for="ctrl-size">Tamaño aparente</label><input type="range" id="ctrl-size"
+                    min="0.65" max="2.2" step="0.05" value="1"><span id="lbl-size">1.00×</span></div>
+            <div class="camera-views"><button class="active" data-camera="5.2">Inmersión</button><button
+                    data-camera="11">Magnetósfera</button><button data-camera="23">Panorama</button></div>
+            <div class="pace-row"><button id="btn-pause-scene">Pausar</button><label for="ctrl-pace">Ritmo</label><input
+                    id="ctrl-pace" type="range" min="0.25" max="2" value="1" step="0.05"><span
+                    id="lbl-pace">1.00×</span></div>
+            <span id="time-scale">CÁMARA LENTA</span>
+            <small>Arrastra para orbitar · Rueda para acercarte</small>
+        </section>
+        <!-- Mini Reproductor Musical (Inferior Izquierda) -->
+        <section id="music-dock" class="music-dock ui-element" aria-label="Reproductor de Música">
+            <audio id="bg-audio" crossorigin="anonymous"></audio>
+
+            <div class="music-main-row">
+                <div id="disc-art" class="disc-art">
+                    <div class="disc-center"></div>
+                </div>
+
+                <div class="music-meta">
+                    <div class="music-title-row">
+                        <span id="track-title" class="track-title">in the pool</span>
+                        <label class="load-mp3-btn" title="Cargar MP3 desde otra carpeta">
+                            <i class="fa-solid fa-folder-open"></i>
+                            <input type="file" id="file-mp3" accept="audio/*" multiple hidden>
+                        </label>
+                    </div>
+                    <span id="track-artist" class="track-artist">Kensuke Ushio</span>
+                </div>
+
+                <div class="music-transport">
+                    <button type="button" id="btn-prev" class="transport-btn" title="Anterior">
+                        <i class="fa-solid fa-backward-step"></i>
+                    </button>
+                    <button type="button" id="btn-play" class="transport-play" title="Reproducir / Pausar">
+                        <i class="fa-solid fa-play"></i>
+                    </button>
+                    <button type="button" id="btn-next" class="transport-btn" title="Siguiente">
+                        <i class="fa-solid fa-forward-step"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="music-seek-row">
+                <span id="time-cur">0:00</span>
+                <input type="range" id="seek-slider" min="0" max="100" step="0.1" value="0">
+                <span id="time-dur">0:00</span>
+            </div>
+
+            <div class="music-bottom-row">
+                <div class="track-selector" id="track-pills">
+                    <button type="button" class="song-pill active" data-idx="0">in the pool</button>
+                    <button type="button" class="song-pill" data-idx="1">Sparks</button>
+                    <button type="button" class="song-pill" data-idx="2">Yellow</button>
+                </div>
+
+                <div class="vol-control">
+                    <i id="vol-icon" class="fa-solid fa-volume-low"></i>
+                    <input type="range" id="vol-slider" min="0" max="1" step="0.01" value="0.75">
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
